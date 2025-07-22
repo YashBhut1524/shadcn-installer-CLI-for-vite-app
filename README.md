@@ -33,7 +33,7 @@ In the **root** of your existing **Vite + React** project:
 npx shadcn-vite-installer
 ```
 
-Follow the prompt to select either:
+Detects project language either:
 
 - **JavaScript**
 - **TypeScript**
@@ -43,7 +43,7 @@ The CLI will handle:
 - Installing required dependencies
 - Setting up Tailwind + shadcn
 - Configuring `vite.config.ts` / `vite.config.js`
-- Creating/patching `tsconfig.json`, `jsconfig.json`, and `index.css`
+- Creating/patching `tsconfig.json`, `jsconfig.json`, `components.json` and `index.css`
 
 ---
 

@@ -101,6 +101,8 @@ async function main() {
 	}
 
 	const templateDir = path.join(__dirname, "..", "templates", language === "ts" ? "ts" : "js");
+	const baseTemplateDir = path.join(__dirname, "..", "templates");
+
 	try {
 		if (language === "ts") {
 			const tsconfigPath = path.join(process.cwd(), "tsconfig.json");
@@ -148,7 +150,20 @@ async function main() {
 		process.exit(1);
 	}
 
-	console.log("✅ shadcn/ui and Tailwind CSS are installed and configured!");
+	// ✅ Copy components.json
+	try {
+		const componentsSrc = path.join(baseTemplateDir, "components.json");
+		const componentsDest = path.join(process.cwd(), "components.json");
+
+		if (fs.existsSync(componentsSrc)) {
+			fs.copyFileSync(componentsSrc, componentsDest);
+			console.log(chalk.green("✔ components.json added to your project."));
+		}
+	} catch (e) {
+		console.error("❌ Failed to copy components.json.");
+	}
+
+	console.log("\n✅ shadcn/ui and Tailwind CSS are installed and configured!");
 	console.log("Now use 'npx shadcn add [component]' as needed, e.g.:");
 	console.log("  npx shadcn add button\n");
 	console.log("Happy coding! 🚀");
