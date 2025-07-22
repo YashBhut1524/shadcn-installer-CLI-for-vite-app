@@ -5,13 +5,13 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { parse, modify, applyEdits } from 'jsonc-parser';
+import { parse, modify, applyEdits } from "jsonc-parser";
 
 // ESM __dirname workaround for file paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper: Patch or create alias in tsconfig/jsonc config safely
+// Helper: Patch or create alias in ts/jsconfig.jsonc config safely
 function ensureAliasInJsoncFile(filePath) {
     let text = "";
     if (fs.existsSync(filePath)) {
@@ -19,7 +19,6 @@ function ensureAliasInJsoncFile(filePath) {
     } else {
         text = "{}";
     }
-    // Parse with allowance for comments & trailing commas
     let data = parse(text) ?? {};
     let editsNeeded = false;
 
@@ -50,6 +49,34 @@ function ensureAliasInJsoncFile(filePath) {
     } else {
         console.log(`${path.basename(filePath)} already has the path alias.`);
     }
+}
+
+// Patch or replace Vite config if necessary
+function patchViteConfig(viteConfigPath, language, templateDir) {
+    if (!fs.existsSync(viteConfigPath)) return false;
+
+    let configText = fs.readFileSync(viteConfigPath, "utf8");
+
+    // Check for @vitejs/plugin-react, @tailwindcss/vite, and the alias "@"
+    const hasTailwind = /@tailwindcss\/vite/.test(configText);
+    const hasAlias = /alias\s*:\s*{[^}]*@/.test(configText);
+
+    if (!hasTailwind || !hasAlias) {
+        // Use template config to fully replace
+        const templateFile = path.join(
+            templateDir,
+            language === "TypeScript" ? "vite.config.ts" : "vite.config.js"
+        );
+        const newContent = fs.readFileSync(templateFile, "utf8");
+
+        fs.writeFileSync(viteConfigPath, newContent);
+        console.log(`Updated ${path.basename(viteConfigPath)} with required plugins and alias.`);
+        return true;
+    }
+    console.log(
+        `${path.basename(viteConfigPath)} already contains plugins and alias. No changes needed.`
+    );
+    return false;
 }
 
 async function main() {
@@ -86,7 +113,7 @@ async function main() {
         const tsconfigPath = path.join(process.cwd(), "tsconfig.json");
         ensureAliasInJsoncFile(tsconfigPath);
 
-        // tsconfig.app.json (this may not exist, patch/create if necessary)
+        // tsconfig.app.json (patch/create if necessary)
         const tsconfigAppPath = path.join(process.cwd(), "tsconfig.app.json");
         if (fs.existsSync(tsconfigAppPath)) {
             ensureAliasInJsoncFile(tsconfigAppPath);
@@ -104,17 +131,16 @@ async function main() {
         ensureAliasInJsoncFile(jsconfigPath);
     }
 
-    // 5. Vite config
+    // 5. Vite config (patch if needed)
     const viteConfigFile = language === "TypeScript" ? "vite.config.ts" : "vite.config.js";
-    const viteConfigSrc = path.join(templateDir, viteConfigFile);
     const viteConfigDst = path.join(process.cwd(), viteConfigFile);
-    if (!fs.existsSync(viteConfigDst)) {
+
+    if (fs.existsSync(viteConfigDst)) {
+        patchViteConfig(viteConfigDst, language, templateDir);
+    } else {
+        const viteConfigSrc = path.join(templateDir, viteConfigFile);
         fs.copyFileSync(viteConfigSrc, viteConfigDst);
         console.log(`Created ${viteConfigFile}`);
-    } else {
-        console.log(`Found existing ${viteConfigFile}. Please ensure your alias and plugin settings match the recommended config:`);
-        console.log(fs.readFileSync(viteConfigSrc, "utf8"));
-        console.log("---- End recommended config ----");
     }
 
     // 6. shadcn/ui: init
