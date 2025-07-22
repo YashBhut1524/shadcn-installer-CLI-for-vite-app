@@ -4,6 +4,22 @@ A CLI tool to quickly install and configure **[shadcn/ui](https://ui.shadcn.dev/
 
 ---
 
+## 📦 Quick Start
+
+You can use the CLI with `npx`:
+
+```sh
+npx shadcn-vite-installer
+```
+
+_or if installed globally:_
+
+```sh
+shadcn-vite-installer
+```
+
+---
+
 ## 🚀 Features
 
 - 📦 Installs `tailwindcss`, `@tailwindcss/vite`, and `@shadcn/ui`
@@ -12,16 +28,6 @@ A CLI tool to quickly install and configure **[shadcn/ui](https://ui.shadcn.dev/
 - 🪄 Initializes `shadcn/ui` with `npx shadcn@latest init`
 - 🧱 Creates or updates `src/index.css` with `@import "tailwindcss"`
 - 🧪 Supports both **TypeScript** and **JavaScript** projects
-
----
-
-## 📦 Installation
-
-You can use the CLI with `npx` (no install required):
-
-```bash
-npx shadcn-vite-installer
-```
 
 ---
 
