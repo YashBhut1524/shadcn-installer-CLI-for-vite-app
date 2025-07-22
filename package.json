@@ -1,15 +1,16 @@
 {
     "name": "shadcn-vite-installer",
     "version": "1.0.0",
-	"main": "index.js",
+    "main": "index.js",
     "type": "module",
     "scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
-	},
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
     "bin": {
         "shadcn-vite-installer": "bin/index.js"
     },
     "dependencies": {
-        "inquirer": "^8.2.6"
+        "inquirer": "^8.2.6",
+        "jsonc-parser": "^3.3.1"
     }
 }

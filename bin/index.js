@@ -1,59 +1,136 @@
+#!/usr/bin/env node
+
 import inquirer from "inquirer";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { parse, modify, applyEdits } from 'jsonc-parser';
 
+// ESM __dirname workaround for file paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper: Patch or create alias in tsconfig/jsonc config safely
+function ensureAliasInJsoncFile(filePath) {
+    let text = "";
+    if (fs.existsSync(filePath)) {
+        text = fs.readFileSync(filePath, "utf-8");
+    } else {
+        text = "{}";
+    }
+    // Parse with allowance for comments & trailing commas
+    let data = parse(text) ?? {};
+    let editsNeeded = false;
+
+    data.compilerOptions = data.compilerOptions || {};
+    if (!("baseUrl" in data.compilerOptions)) {
+        data.compilerOptions.baseUrl = ".";
+        editsNeeded = true;
+    }
+    if (!("paths" in data.compilerOptions)) {
+        data.compilerOptions.paths = { "@/*": ["./src/*"] };
+        editsNeeded = true;
+    } else if (!data.compilerOptions.paths["@/*"]) {
+        data.compilerOptions.paths["@/*"] = ["./src/*"];
+        editsNeeded = true;
+    }
+
+    if (editsNeeded) {
+        // Use jsonc edit calculation to preserve formatting/comments
+        let edits = modify(
+            text,
+            ["compilerOptions"],
+            data.compilerOptions,
+            { formattingOptions: { insertSpaces: true, tabSize: 2 } }
+        );
+        const newText = applyEdits(text, edits);
+        fs.writeFileSync(filePath, newText);
+        console.log(`Updated ${path.basename(filePath)} with required alias.`);
+    } else {
+        console.log(`${path.basename(filePath)} already has the path alias.`);
+    }
+}
+
 async function main() {
+    // 1. Prompt
     const { language } = await inquirer.prompt([
         {
             type: "list",
             name: "language",
-            message: "Which language do you want to use?",
+            message: "Which language does your project use?",
             choices: ["JavaScript", "TypeScript"],
         },
     ]);
 
-    // 1. Install Vite, React, Tailwind, and shadcn dependencies
-    console.log("Installing Vite, TailwindCSS, shadcn, and dependencies...");
-    if (language === "TypeScript") {
-        execSync("npm create vite@latest . -- --template react-ts", { stdio: "inherit" });
-    } else {
-        execSync("npm create vite@latest . -- --template react", { stdio: "inherit" });
-    }
-
+    // 2. Install dependencies
+    console.log("Installing TailwindCSS, shadcn/ui, and related dependencies...");
     execSync("npm install tailwindcss @tailwindcss/vite @shadcn/ui", { stdio: "inherit" });
-
-    // Install type definitions for TS
     if (language === "TypeScript") {
         execSync("npm install -D @types/node", { stdio: "inherit" });
     }
 
-    // 2. Add Tailwind import to src/index.css
-    fs.writeFileSync(path.join(process.cwd(), "src", "index.css"), '@import "tailwindcss";\n');
-
-    // 3. Add config files
-    const templateDir = path.join(__dirname, "..", "templates", language === "TypeScript" ? "ts" : "js");
-    const files = fs.readdirSync(templateDir);
-
-    files.forEach((file) => {
-        const content = fs.readFileSync(path.join(templateDir, file));
-        fs.writeFileSync(path.join(process.cwd(), file), content);
-    });
-
-    // JS path alias config
-    if (language === "JavaScript") {
-        fs.writeFileSync(
-            path.join(process.cwd(), "jsconfig.json"),
-            fs.readFileSync(path.join(templateDir, "jsconfig.json"))
-        );
+    // 3. index.css
+    const indexCSS = path.join(process.cwd(), "src", "index.css");
+    try {
+        fs.writeFileSync(indexCSS, '@import "tailwindcss";\n');
+    } catch (e) {
+        console.error("⚠️  Could not write to src/index.css. Make sure you are in the root of a Vite app.");
+        process.exit(1);
     }
 
-    // 4. Success message
-    console.log("\n✅ shadcn, TailwindCSS, and project config installed & ready!");
+    // 4. Alias config
+    const templateDir = path.join(__dirname, "..", "templates", language === "TypeScript" ? "ts" : "js");
+    if (language === "TypeScript") {
+        // tsconfig.json
+        const tsconfigPath = path.join(process.cwd(), "tsconfig.json");
+        ensureAliasInJsoncFile(tsconfigPath);
+
+        // tsconfig.app.json (this may not exist, patch/create if necessary)
+        const tsconfigAppPath = path.join(process.cwd(), "tsconfig.app.json");
+        if (fs.existsSync(tsconfigAppPath)) {
+            ensureAliasInJsoncFile(tsconfigAppPath);
+        } else {
+            const tsAppTemplate = path.join(templateDir, "tsconfig.app.json");
+            if (fs.existsSync(tsAppTemplate)) {
+                fs.copyFileSync(tsAppTemplate, tsconfigAppPath);
+                ensureAliasInJsoncFile(tsconfigAppPath);
+                console.log("Created tsconfig.app.json with alias.");
+            }
+        }
+    } else {
+        // jsconfig.json
+        const jsconfigPath = path.join(process.cwd(), "jsconfig.json");
+        ensureAliasInJsoncFile(jsconfigPath);
+    }
+
+    // 5. Vite config
+    const viteConfigFile = language === "TypeScript" ? "vite.config.ts" : "vite.config.js";
+    const viteConfigSrc = path.join(templateDir, viteConfigFile);
+    const viteConfigDst = path.join(process.cwd(), viteConfigFile);
+    if (!fs.existsSync(viteConfigDst)) {
+        fs.copyFileSync(viteConfigSrc, viteConfigDst);
+        console.log(`Created ${viteConfigFile}`);
+    } else {
+        console.log(`Found existing ${viteConfigFile}. Please ensure your alias and plugin settings match the recommended config:`);
+        console.log(fs.readFileSync(viteConfigSrc, "utf8"));
+        console.log("---- End recommended config ----");
+    }
+
+    // 6. shadcn/ui: init
+    try {
+        console.log("\nInitializing shadcn/ui...");
+        execSync("npx shadcn@latest init -y", { stdio: "inherit" });
+    } catch (e) {
+        console.log("⚠️  shadcn init may require user input. If setup is not complete, run 'npx shadcn@latest init' manually.");
+    }
+
+    // 7. Success message
+    console.log("\n✅ All set! shadcn/ui and TailwindCSS are installed and configured.");
+    console.log("You can now use 'npx shadcn add [component]' to install individual components as needed.\n");
+    console.log("Example:");
+    console.log("  npx shadcn add button");
+    console.log("\nHappy coding! 🚀");
 }
 
 main();
