@@ -36,7 +36,6 @@ function ensureAliasInJsoncFile(filePath) {
     }
 
     if (editsNeeded) {
-        // Use jsonc edit calculation to preserve formatting/comments
         let edits = modify(
             text,
             ["compilerOptions"],
@@ -45,9 +44,6 @@ function ensureAliasInJsoncFile(filePath) {
         );
         const newText = applyEdits(text, edits);
         fs.writeFileSync(filePath, newText);
-        console.log(`Updated ${path.basename(filePath)} with required alias.`);
-    } else {
-        console.log(`${path.basename(filePath)} already has the path alias.`);
     }
 }
 
@@ -56,13 +52,10 @@ function patchViteConfig(viteConfigPath, language, templateDir) {
     if (!fs.existsSync(viteConfigPath)) return false;
 
     let configText = fs.readFileSync(viteConfigPath, "utf8");
-
-    // Check for @vitejs/plugin-react, @tailwindcss/vite, and the alias "@"
     const hasTailwind = /@tailwindcss\/vite/.test(configText);
     const hasAlias = /alias\s*:\s*{[^}]*@/.test(configText);
 
     if (!hasTailwind || !hasAlias) {
-        // Use template config to fully replace
         const templateFile = path.join(
             templateDir,
             language === "TypeScript" ? "vite.config.ts" : "vite.config.js"
@@ -70,17 +63,12 @@ function patchViteConfig(viteConfigPath, language, templateDir) {
         const newContent = fs.readFileSync(templateFile, "utf8");
 
         fs.writeFileSync(viteConfigPath, newContent);
-        console.log(`Updated ${path.basename(viteConfigPath)} with required plugins and alias.`);
         return true;
     }
-    console.log(
-        `${path.basename(viteConfigPath)} already contains plugins and alias. No changes needed.`
-    );
     return false;
 }
 
 async function main() {
-    // 1. Prompt
     const { language } = await inquirer.prompt([
         {
             type: "list",
@@ -90,73 +78,83 @@ async function main() {
         },
     ]);
 
-    // 2. Install dependencies
-    console.log("Installing TailwindCSS, shadcn/ui, and related dependencies...");
-    execSync("npm install tailwindcss @tailwindcss/vite @shadcn/ui", { stdio: "inherit" });
-    if (language === "TypeScript") {
-        execSync("npm install -D @types/node", { stdio: "inherit" });
-    }
+    console.log("Setting up shadcn/ui and Tailwind CSS, please wait...\n");
 
-    // 3. index.css
-    const indexCSS = path.join(process.cwd(), "src", "index.css");
     try {
-        fs.writeFileSync(indexCSS, '@import "tailwindcss";\n');
+        execSync("npm install tailwindcss @tailwindcss/vite @shadcn/ui", { stdio: "ignore" });
+        if (language === "TypeScript") {
+            execSync("npm install -D @types/node", { stdio: "ignore" });
+        }
     } catch (e) {
-        console.error("⚠️  Could not write to src/index.css. Make sure you are in the root of a Vite app.");
+        console.error("❌ Error installing dependencies.");
         process.exit(1);
     }
 
-    // 4. Alias config
-    const templateDir = path.join(__dirname, "..", "templates", language === "TypeScript" ? "ts" : "js");
-    if (language === "TypeScript") {
-        // tsconfig.json
-        const tsconfigPath = path.join(process.cwd(), "tsconfig.json");
-        ensureAliasInJsoncFile(tsconfigPath);
-
-        // tsconfig.app.json (patch/create if necessary)
-        const tsconfigAppPath = path.join(process.cwd(), "tsconfig.app.json");
-        if (fs.existsSync(tsconfigAppPath)) {
-            ensureAliasInJsoncFile(tsconfigAppPath);
-        } else {
-            const tsAppTemplate = path.join(templateDir, "tsconfig.app.json");
-            if (fs.existsSync(tsAppTemplate)) {
-                fs.copyFileSync(tsAppTemplate, tsconfigAppPath);
-                ensureAliasInJsoncFile(tsconfigAppPath);
-                console.log("Created tsconfig.app.json with alias.");
-            }
-        }
-    } else {
-        // jsconfig.json
-        const jsconfigPath = path.join(process.cwd(), "jsconfig.json");
-        ensureAliasInJsoncFile(jsconfigPath);
-    }
-
-    // 5. Vite config (patch if needed)
-    const viteConfigFile = language === "TypeScript" ? "vite.config.ts" : "vite.config.js";
-    const viteConfigDst = path.join(process.cwd(), viteConfigFile);
-
-    if (fs.existsSync(viteConfigDst)) {
-        patchViteConfig(viteConfigDst, language, templateDir);
-    } else {
-        const viteConfigSrc = path.join(templateDir, viteConfigFile);
-        fs.copyFileSync(viteConfigSrc, viteConfigDst);
-        console.log(`Created ${viteConfigFile}`);
-    }
-
-    // 6. shadcn/ui: init
+    // src/index.css
     try {
-        console.log("\nInitializing shadcn/ui...");
-        execSync("npx shadcn@latest init -y", { stdio: "inherit" });
+        const indexCSS = path.join(process.cwd(), "src", "index.css");
+        fs.writeFileSync(indexCSS, '@import "tailwindcss";\n');
     } catch (e) {
-        console.log("⚠️  shadcn init may require user input. If setup is not complete, run 'npx shadcn@latest init' manually.");
+        console.error("❌ Could not write to src/index.css. Make sure you are in the root of a Vite app.");
+        process.exit(1);
     }
 
-    // 7. Success message
-    console.log("\n✅ All set! shadcn/ui and TailwindCSS are installed and configured.");
-    console.log("You can now use 'npx shadcn add [component]' to install individual components as needed.\n");
-    console.log("Example:");
-    console.log("  npx shadcn add button");
-    console.log("\nHappy coding! 🚀");
+    const templateDir = path.join(__dirname, "..", "templates", language === "TypeScript" ? "ts" : "js");
+    try {
+        if (language === "TypeScript") {
+            // tsconfig.json
+            const tsconfigPath = path.join(process.cwd(), "tsconfig.json");
+            ensureAliasInJsoncFile(tsconfigPath);
+
+            // tsconfig.app.json (patch/create if necessary)
+            const tsconfigAppPath = path.join(process.cwd(), "tsconfig.app.json");
+            if (fs.existsSync(tsconfigAppPath)) {
+                ensureAliasInJsoncFile(tsconfigAppPath);
+            } else {
+                const tsAppTemplate = path.join(templateDir, "tsconfig.app.json");
+                if (fs.existsSync(tsAppTemplate)) {
+                    fs.copyFileSync(tsAppTemplate, tsconfigAppPath);
+                    ensureAliasInJsoncFile(tsconfigAppPath);
+                }
+            }
+        } else {
+            // jsconfig.json
+            const jsconfigPath = path.join(process.cwd(), "jsconfig.json");
+            ensureAliasInJsoncFile(jsconfigPath);
+        }
+    } catch (e) {
+        console.error("❌ Error patching tsconfig/jsconfig.");
+        process.exit(1);
+    }
+
+    // Vite config
+    try {
+        const viteConfigFile = language === "TypeScript" ? "vite.config.ts" : "vite.config.js";
+        const viteConfigDst = path.join(process.cwd(), viteConfigFile);
+        if (fs.existsSync(viteConfigDst)) {
+            patchViteConfig(viteConfigDst, language, templateDir);
+        } else {
+            const viteConfigSrc = path.join(templateDir, viteConfigFile);
+            fs.copyFileSync(viteConfigSrc, viteConfigDst);
+        }
+    } catch (e) {
+        console.error("❌ Error updating vite.config.");
+        process.exit(1);
+    }
+
+    // shadcn/ui: init
+    try {
+        execSync("npx shadcn@latest init -y", { stdio: "ignore" });
+    } catch (e) {
+        console.error("❌ Error during shadcn/ui initialization. Try running 'npx shadcn@latest init' manually.");
+        process.exit(1);
+    }
+
+    // Success message at the end
+    console.log("✅ shadcn/ui and Tailwind CSS are installed and configured!");
+    console.log("Now use 'npx shadcn add [component]' as needed, e.g.:");
+    console.log("  npx shadcn add button\n");
+    console.log("Happy coding! 🚀");
 }
 
 main();
