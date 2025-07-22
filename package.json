@@ -12,5 +12,14 @@
     "dependencies": {
         "inquirer": "^8.2.6",
         "jsonc-parser": "^3.3.1"
-    }
+    },
+    "keywords": [
+        "shadcn",
+        "shadcn-ui",
+        "vite",
+		"react",
+		"typescript",
+		"javascript",
+		"tailwindcss"
+    ]
 }
